@@ -1,0 +1,7 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.lxxmng/ocean-schedules",
+  "description": "Compare ocean carrier sailing schedules, transit times, and on-time reliability before you book.",
+  "version": "0.1.0",
+  "remotes": [{ "type": "streamable-http", "url": "https://mcp.schedulesmcp.com/mcp" }]
+}
