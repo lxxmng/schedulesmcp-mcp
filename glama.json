@@ -8,7 +8,13 @@
     "carrier_reliability",
     "transit_time",
     "find_sailings",
+    "get_schedules",
+    "find_best_sailings",
+    "watch_lane",
     "port_reliability",
-    "carrier_league"
+    "carrier_league",
+    "port_congestion",
+    "active_cyclones",
+    "lane_storm_exposure"
   ]
 }

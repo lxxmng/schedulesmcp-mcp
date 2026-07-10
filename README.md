@@ -19,7 +19,14 @@ it with no signup.
 | `carrier_reliability` | On-time % and delay distribution for a carrier, optionally per lane |
 | `transit_time` | Observed median / p90 transit time for a carrier on a lane |
 | `find_sailings` | Observed and derived upcoming departures on a lane |
+| `get_schedules` | Published forward sailings on a lane: carrier, vessel, voyage, ETD/ETA and cut-offs |
+| `find_best_sailings` | Best upcoming sailings on a lane, one per carrier, ranked — filter by dates, transit, reliability, open cut-offs |
+| `watch_lane` | Watch a lane for schedule alerts — blank sailings, closing cut-offs, slips, reliability drops (paid) |
 | `port_reliability` | Congestion and dwell signals for a port |
+| `carrier_league` | League table of carriers ranked by overall on-time reliability |
+| `port_congestion` | Fused port-congestion signal: level, expected added wait in days, confidence |
+| `active_cyclones` | Live tropical cyclones currently active on ocean trade lanes |
+| `lane_storm_exposure` | Whether a lane currently passes through an active cyclone's forecast gale field |
 
 ## Connect
 

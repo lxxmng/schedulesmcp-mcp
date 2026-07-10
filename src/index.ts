@@ -17,6 +17,8 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { z } from 'zod'
 
 const API_BASE = process.env.API_BASE_URL ?? 'https://schedulesmcp-api.fly.dev/v1'
+// The weather surface is public (free upstream data) and mounted OUTSIDE /v1 — strip the version.
+const WEATHER_BASE = API_BASE.replace(/\/v1\/?$/, '')
 const PORT = Number.parseInt(process.env.MCP_PORT ?? '3002')
 const DEMO_KEY = process.env.MCP_DEMO_API_KEY ?? 'smcp_demo_public'
 
@@ -101,6 +103,15 @@ function lookupDemo(origin: string, destination: string) {
 async function apiGet(path: string, apiKey: string) {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { Authorization: `Bearer ${apiKey}` },
+  })
+  return res.json()
+}
+
+async function apiPost(path: string, apiKey: string, body: unknown) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   })
   return res.json()
 }
@@ -216,13 +227,169 @@ function buildServer(apiKey: string) {
         transit_p50_days: c.transit_p50_days,
       }))
       const note = isDemo
-        ? 'Demo data (synthetic). Observed cadence from tracked sailings; published forward schedules land in Phase 4.'
-        : 'Observed sailings from tracking exhaust; published forward schedules land in Phase 4.'
+        ? 'Demo data (synthetic). Observed cadence from tracked sailings. For published forward departures with vessel/voyage/cutoffs, use get_schedules.'
+        : 'Observed cadence from tracking exhaust. For published forward departures with vessel/voyage/cutoffs, use get_schedules.'
       return {
         content: [
           { type: 'text', text: JSON.stringify({ origin, destination, sailings, note }, null, 2) },
         ],
       }
+    }
+  )
+
+  server.tool(
+    'get_schedules',
+    'Published forward sailing schedules on an origin→destination lane: carrier, vessel, voyage, ETD/ETA and cut-offs, soonest first. Sourced from carrier connectors (and aggregator coverage). Use this to find concrete upcoming departures to book.',
+    {
+      origin: z.string().describe('Origin port UN/LOCODE, e.g. CNSHA'),
+      destination: z.string().describe('Destination port UN/LOCODE, e.g. NLRTM'),
+    },
+    async ({ origin, destination }) => {
+      if (isDemo) {
+        // Synthetic forward sailings derived from the demo lane carriers.
+        const base = lookupDemo(origin, destination)
+        const sailings = base.map((c, i) => ({
+          carrier_code: c.carrier_code,
+          vessel_name: `${c.carrier_name.toUpperCase()} DEMO ${i + 1}`,
+          voyage_number: `${String(i + 1).padStart(3, '0')}W`,
+          published_departure: `(demo, ~${(i + 1) * c.frequency_days}d out)`,
+          source: 'connector',
+        }))
+        const note =
+          sailings.length === 0
+            ? 'No demo data for this lane. Try CNSHA→NLRTM or CNSHA→USLAX, or sign up at schedulesmcp.com.'
+            : 'Demo data (synthetic). Real keys return live published_sailings with actual ETD/ETA and cut-offs.'
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ origin, destination, sailings, note }, null, 2),
+            },
+          ],
+        }
+      }
+      const data = await apiGet(`/schedules?origin=${origin}&destination=${destination}`, apiKey)
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'find_best_sailings',
+    'Decision query: the best upcoming sailings on a lane, ONE per carrier (next bookable departure), ranked. Filter by date window, max transit days, min on-time reliability, cut-off still open, and direct-vs-transshipment. Use this to answer "what should I book?".',
+    {
+      origin: z.string().describe('Origin port UN/LOCODE or name resolves upstream, e.g. CNSHA'),
+      destination: z.string().describe('Destination port UN/LOCODE, e.g. NLRTM'),
+      from: z.string().optional().describe('Earliest departure date YYYY-MM-DD (default: today)'),
+      to: z.string().optional().describe('Latest departure date YYYY-MM-DD (default: +60 days)'),
+      max_transit_days: z.number().optional().describe('Maximum transit time in days'),
+      reliability_floor: z.number().optional().describe('Minimum 90-day on-time %, 0-100'),
+      cutoff_open: z
+        .boolean()
+        .optional()
+        .describe('Only sailings whose booking cut-off has not passed'),
+      direct_only: z.boolean().optional().describe('Exclude transshipment routings'),
+      sort: z
+        .enum(['recommended', 'reliability', 'fastest', 'soonest'])
+        .optional()
+        .describe('Ranking (default recommended = reliability blended with transit)'),
+    },
+    async ({
+      origin,
+      destination,
+      from,
+      to,
+      max_transit_days,
+      reliability_floor,
+      cutoff_open,
+      direct_only,
+      sort,
+    }) => {
+      if (isDemo) {
+        const carriers = lookupDemo(origin, destination)
+          .map((c) => ({
+            carrier_code: c.carrier_code,
+            carrier_name: c.carrier_name,
+            transit_days: c.transit_p50_days,
+            reliability_pct: c.on_time_pct,
+            direct: true,
+            note: 'demo',
+          }))
+          .sort(
+            (a, b) =>
+              b.reliability_pct - 0.8 * b.transit_days - (a.reliability_pct - 0.8 * a.transit_days)
+          )
+        const note =
+          carriers.length === 0
+            ? 'No demo data for this lane. Try CNSHA→NLRTM or CNSHA→USLAX, or subscribe at schedulesmcp.com/pricing.'
+            : 'Demo data (synthetic). Real keys return live ranked sailings with vessel/voyage, ETD/ETA and cut-offs.'
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ origin, destination, options: carriers, note }, null, 2),
+            },
+          ],
+        }
+      }
+      const params = new URLSearchParams({ origin, destination })
+      if (from) params.set('from', from)
+      if (to) params.set('to', to)
+      if (max_transit_days != null) params.set('max_transit_days', String(max_transit_days))
+      if (reliability_floor != null) params.set('reliability_floor', String(reliability_floor))
+      if (cutoff_open) params.set('cutoff_open', 'true')
+      if (direct_only) params.set('direct_only', 'true')
+      if (sort) params.set('sort', sort)
+      const data = await apiGet(`/best-sailings?${params.toString()}`, apiKey)
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'watch_lane',
+    'Watch a lane for schedule alerts (PAID): get emailed when a sailing on it is blanked, a booking cut-off is about to close, or a sailing slips. Also alerts on reliability drops. Returns the created watch.',
+    {
+      origin: z.string().describe('Origin port UN/LOCODE, e.g. CNNGB'),
+      destination: z.string().describe('Destination port UN/LOCODE, e.g. NLRTM'),
+      carrier_code: z
+        .string()
+        .optional()
+        .describe('Optional SCAC to scope the watch to one carrier'),
+      alert_blank: z
+        .boolean()
+        .optional()
+        .describe('Alert on suspected blank sailings (default true)'),
+      alert_cutoff: z
+        .boolean()
+        .optional()
+        .describe('Alert when a booking cut-off is closing (default true)'),
+      alert_slip: z
+        .boolean()
+        .optional()
+        .describe('Alert when a sailing slips vs schedule (default true)'),
+      cutoff_lead_hours: z
+        .number()
+        .optional()
+        .describe('Hours before cut-off to alert (default 48)'),
+    },
+    async (args) => {
+      if (isDemo) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  note: 'Demo key cannot create watches. Subscribe and use your real key at schedulesmcp.com/pricing to set schedule alerts.',
+                },
+                null,
+                2
+              ),
+            },
+          ],
+        }
+      }
+      const data = await apiPost('/watches', apiKey, args)
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
     }
   )
 
@@ -268,14 +435,164 @@ function buildServer(apiKey: string) {
     }
   )
 
+  server.tool(
+    'carrier_league',
+    'Carrier league table — ocean carriers ranked by overall on-time reliability across all tracked lanes.',
+    {},
+    async () => {
+      if (isDemo) {
+        const seen = new Map<
+          string,
+          { carrier_code: string; carrier_name: string; on_time_pct: number }
+        >()
+        for (const rows of Object.values(DEMO_LANES)) {
+          for (const c of rows) {
+            const e = seen.get(c.carrier_code)
+            if (!e)
+              seen.set(c.carrier_code, {
+                carrier_code: c.carrier_code,
+                carrier_name: c.carrier_name,
+                on_time_pct: c.on_time_pct,
+              })
+            else e.on_time_pct = Math.round((e.on_time_pct + c.on_time_pct) / 2)
+          }
+        }
+        const league = [...seen.values()].sort((a, b) => b.on_time_pct - a.on_time_pct)
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ league, note: 'Demo data (synthetic).' }, null, 2),
+            },
+          ],
+        }
+      }
+      const data = await apiGet('/reliability/leaderboard?min_obs=20', apiKey)
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'port_congestion',
+    'Fused port-congestion signal for a port (UN/LOCODE): effective level (mild/moderate/severe), ' +
+      'expected added wait in days (for ETA-band widening), a 0–1 confidence, and per-source detail — ' +
+      'weiyun broad-AIS analysis + IMF PortWatch throughput + our own AIS wait/density.',
+    { port: z.string().describe('Port UN/LOCODE, e.g. NLRTM') },
+    async ({ port }) => {
+      const up = port.toUpperCase()
+      if (isDemo) {
+        const DEMO: Record<
+          string,
+          { level: string; expected_wait_days: number; confidence: number }
+        > = {
+          CNSHA: { level: 'severe', expected_wait_days: 4.5, confidence: 0.82 },
+          NLRTM: { level: 'moderate', expected_wait_days: 1.5, confidence: 0.6 },
+          SGSIN: { level: 'mild', expected_wait_days: 0.5, confidence: 0.5 },
+        }
+        const d = DEMO[up] ?? { level: 'mild', expected_wait_days: 0.5, confidence: 0.4 }
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                { port: up, congested: up in DEMO, ...d, note: 'Demo data (synthetic).' },
+                null,
+                2
+              ),
+            },
+          ],
+        }
+      }
+      const data = await apiGet(`/port-congestion?port=${encodeURIComponent(up)}`, apiKey)
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'active_cyclones',
+    'Live tropical cyclones (typhoons/hurricanes) currently active on ocean trade lanes — name, basin, category, center position, max wind, pressure and movement, from CMA (NW-Pacific) + NHC (Atlantic/E-Pacific) + JTWC (Indian/Southern Hemisphere) + GDACS (global). Use this to see which storms are at sea right now.',
+    {},
+    async () => {
+      const res = await fetch(`${WEATHER_BASE}/weather/cyclones`)
+      const data = await res.json()
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
+  server.tool(
+    'lane_storm_exposure',
+    'Whether an origin→destination ocean lane currently passes through an active cyclone\'s forecast gale field (a "storm-exposed" sailing at risk of weather delay). Omit ports to list every exposed lane.',
+    {
+      origin: z.string().optional().describe('Origin port UN/LOCODE, e.g. CNSHA'),
+      destination: z.string().optional().describe('Destination port UN/LOCODE, e.g. USLAX'),
+    },
+    async ({ origin, destination }) => {
+      const qs = new URLSearchParams()
+      if (origin) qs.set('pol', origin)
+      if (destination) qs.set('pod', destination)
+      const res = await fetch(`${WEATHER_BASE}/weather/exposure?${qs.toString()}`)
+      const data = await res.json()
+      return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] }
+    }
+  )
+
   return server
 }
 
 // ── HTTP transport (Streamable HTTP) ──────────────────────────────────────────
+// ── Per-IP rate limiting (in-memory; mirrors trackingmcp's demo limiter) ──────
+// Protects the open demo endpoint from abuse/cost without requiring a key. Counters
+// are per-machine (Fly may run >1) so treat as approximate guards; tune via env.
+const RL_PER_MIN = Number.parseInt(process.env.MCP_RATE_PER_IP_PER_MIN ?? '60')
+const RL_GLOBAL_PER_DAY = Number.parseInt(process.env.MCP_RATE_GLOBAL_PER_DAY ?? '20000')
+const rlIpHits = new Map<string, { count: number; resetAt: number }>()
+let rlDayCount = 0
+let rlDayReset = 0
+
+function rateLimit(ip: string): { ok: boolean; reason?: string; retryAfter?: number } {
+  const now = Date.now()
+  if (now > rlDayReset) {
+    rlDayCount = 0
+    rlDayReset = now + 86_400_000
+  }
+  if (rlDayCount >= RL_GLOBAL_PER_DAY)
+    return {
+      ok: false,
+      reason: 'Daily capacity reached — please try again later.',
+      retryAfter: 3600,
+    }
+  const e = rlIpHits.get(ip)
+  if (e && now < e.resetAt) {
+    if (e.count >= RL_PER_MIN)
+      return {
+        ok: false,
+        reason: `Rate limit: ${RL_PER_MIN} requests/minute per IP — slow down and retry shortly.`,
+        retryAfter: Math.ceil((e.resetAt - now) / 1000),
+      }
+    e.count++
+  } else {
+    rlIpHits.set(ip, { count: 1, resetAt: now + 60_000 })
+  }
+  rlDayCount++
+  return { ok: true }
+}
+
 const handler = async (req: Request): Promise<Response> => {
   const url = new URL(req.url)
   if (url.pathname === '/health') return new Response('ok', { status: 200 })
   if (url.pathname !== '/mcp') return new Response('Not found', { status: 404 })
+
+  // Per-IP rate limit before any work (cheap rejection of floods).
+  const clientIp =
+    req.headers.get('fly-client-ip') ??
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+    '0.0.0.0'
+  const rl = rateLimit(clientIp)
+  if (!rl.ok)
+    return Response.json(
+      { error: rl.reason },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 60) } }
+    )
 
   const authHeader = req.headers.get('Authorization')
   const apiKey = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : DEMO_KEY
@@ -287,4 +604,3 @@ const handler = async (req: Request): Promise<Response> => {
 }
 
 Bun.serve({ port: PORT, fetch: handler })
-console.log(`schedulesmcp-mcp listening on :${PORT}`)
