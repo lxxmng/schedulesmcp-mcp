@@ -1,4 +1,14 @@
 {
   "$schema": "https://glama.ai/mcp/schemas/server.json",
-  "maintainers": ["lxxmng"]
+  "maintainers": ["lxxmng"],
+  "name": "ocean-schedules",
+  "description": "Compare ocean carrier sailing schedules, transit times, and observed on-time reliability before you book — 60+ carriers live, 72,000+ forward sailings, 5,000+ lanes, reliability scored from 4,200+ observed port calls. Remote Streamable HTTP server at https://mcp.schedulesmcp.com/mcp — public demo key smcp_demo_public for connection testing; live data and docs at https://schedulesmcp.com.",
+  "tools": [
+    "compare_lanes",
+    "carrier_reliability",
+    "transit_time",
+    "find_sailings",
+    "port_reliability",
+    "carrier_league"
+  ]
 }
