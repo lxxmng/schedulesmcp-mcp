@@ -1,10 +1,11 @@
 # SchedulesMCP — Ocean Schedules & Carrier Reliability MCP Server
 
 Compare ocean carrier **sailing schedules, transit times, and on-time reliability** before
-you book — straight from your AI client (Claude, Cursor, Windsurf, or any MCP client).
+you book — 60+ carriers, 72,000+ forward sailings across 5,000+ lanes and 255 ports —
+straight from your AI client (Claude, Cursor, Windsurf, or any MCP client).
 
 A sister product to [TrackingMCP](https://trackingmcp.com). Reliability is derived from
-observed actual-vs-scheduled arrivals across tracked ocean port calls — not carrier promises.
+observed actual-vs-scheduled arrivals across 4,200+ scored ocean port calls — not carrier promises.
 
 This repo is the **public MCP server** for [schedulesmcp.com](https://schedulesmcp.com). It runs
 as a remote Streamable HTTP server; you don't need to host it. Use the public demo key to try

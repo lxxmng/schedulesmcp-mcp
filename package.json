@@ -2,7 +2,7 @@
   "name": "@schedulesmcp/mcp-server",
   "mcpName": "io.github.lxxmng/ocean-schedules",
   "version": "0.1.0",
-  "description": "Ocean freight sailing-schedule & carrier-reliability MCP server — compare lanes, transit times, and on-time performance before you book. Works with Claude, Cursor, and any MCP client.",
+  "description": "Ocean freight sailing-schedule & carrier-reliability MCP server — 60+ carriers, 72,000+ forward sailings, 5,000+ lanes. Compare lanes, transit times, and on-time performance before you book. Works with Claude, Cursor, and any MCP client.",
   "type": "module",
   "main": "dist/index.js",
   "bin": { "schedulesmcp-mcp": "dist/index.js" },
