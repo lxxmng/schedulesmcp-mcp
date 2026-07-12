@@ -1,13 +1,15 @@
 {
-  "name": "@schedulesmcp/mcp-server",
+  "name": "schedulesmcp-mcp",
   "mcpName": "io.github.lxxmng/ocean-schedules",
   "version": "0.1.0",
-  "description": "Ocean freight sailing-schedule & carrier-reliability MCP server — 60+ carriers, 72,000+ forward sailings, 5,000+ lanes. Compare lanes, transit times, and on-time performance before you book. Works with Claude, Cursor, and any MCP client.",
+  "description": "Ocean freight sailing-schedule & carrier-reliability MCP server \u2014 60+ carriers, 72,000+ forward sailings, 5,000+ lanes. Compare lanes, transit times, and on-time performance before you book. Works with Claude, Cursor, and any MCP client.",
   "type": "module",
   "main": "dist/index.js",
-  "bin": { "schedulesmcp-mcp": "dist/index.js" },
+  "bin": {
+    "schedulesmcp-mcp": "dist/index.js"
+  },
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target node",
+    "build": "bun build src/index.ts --outdir dist --target node --banner \"#!/usr/bin/env node\"",
     "dev": "bun run --watch src/index.ts",
     "start": "bun src/index.ts"
   },
@@ -26,12 +28,23 @@
   "author": "SchedulesMCP",
   "license": "MIT",
   "homepage": "https://schedulesmcp.com/mcp",
-  "repository": { "type": "git", "url": "https://github.com/lxxmng/schedulesmcp" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lxxmng/schedulesmcp-mcp"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "bun-types": "^1.3.14"
-  }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
 }
