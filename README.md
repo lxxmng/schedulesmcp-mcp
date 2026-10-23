@@ -23,9 +23,6 @@ Sister product to [TrackingMCP](https://trackingmcp.com) (ocean container tracki
 |------|-------------|
 | `compare_lanes` | Rank carriers serving an origin→destination port pair by on-time reliability and transit time. Use this to decide which line to book. |
 | `carrier_reliability` | On-time performance and delay distribution for a specific carrier (by SCAC), optionally on a given lane. |
-| `transit_time` | Observed transit-time distribution (median / p90, in days) for a carrier on an origin→destination lane. |
-| `find_sailings` | Observed and derived upcoming departures on an origin→destination lane, with carrier and frequency. |
-| `port_reliability` | Congestion and dwell signals for a port (UN/LOCODE): average wait and vessels at anchor. |
 
 ## Quick connect
 
