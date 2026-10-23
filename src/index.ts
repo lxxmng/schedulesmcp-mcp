@@ -142,7 +142,7 @@ function buildServer(apiKey: string) {
 
   server.tool(
     'carrier_reliability',
-    'On-time performance and delay distribution for a specific carrier (by SCAC), optionally on a given lane.',
+    'On-time performance and delay distribution for a specific carrier (by SCAC).',
     { carrier_code: z.string().describe('Carrier SCAC, e.g. MAEU') },
     async ({ carrier_code }) => {
       if (isDemo) {

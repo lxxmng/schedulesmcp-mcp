@@ -22,7 +22,7 @@ Sister product to [TrackingMCP](https://trackingmcp.com) (ocean container tracki
 | Tool | What it does |
 |------|-------------|
 | `compare_lanes` | Rank carriers serving an origin→destination port pair by on-time reliability and transit time. Use this to decide which line to book. |
-| `carrier_reliability` | On-time performance and delay distribution for a specific carrier (by SCAC), optionally on a given lane. |
+| `carrier_reliability` | On-time performance and delay distribution for a specific carrier (by SCAC). |
 
 ## Quick connect
 
